@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import LiveChartView from "../components/LiveChartView";
+import DateTimePicker from "react-datetime-picker";
+import * as STATIC from "../common/static";
+
+//const config = require(`../config/${process.env.APP_ENV}`)
+const config = require(`../config/local`);
 
 function rendomNumber(min, max) {
   if (min >= max) {
@@ -9,88 +14,94 @@ function rendomNumber(min, max) {
 }
 
 class LiveChart extends React.Component {
-  
   constructor(props) {
     super(props);
-    this.defaulSpeed = 1000 // 1 seconde
+    this.defaulSpeed = 50; // 0.05 seconde
     this.state = {
       data: [],
-      speedOptions: [1, 5, 10 ,20, 50],
-      time: props.time,
-      speed: 1000,
-      buttonLable: 'stop'
+      speedOptions: [1, 2, 5, 10, 30, 100],
+      startTime: props.startTime,
+      speedValue: 1,
+      buttonLable: "stop",
+      webSocketstatus: STATIC.websocket.disconnected,
     };
-    this.delay = 0 // 0 secondes
+    this.delay = 0; // 0 secondes
 
-    this.onSelectSpeed = this.onSelectSpeed.bind(this)
-    this.startTimer = this.startTimer.bind(this)
-    this.clearTimer = this.clearTimer.bind(this)
-    this.chartFlowHandler = this.chartFlowHandler.bind(this)
+    this.onSelectSpeed = this.onSelectSpeed.bind(this);
+    this.startTimer = this.startTimer.bind(this);
+    this.clearTimer = this.clearTimer.bind(this);
+    this.chartFlowHandler = this.chartFlowHandler.bind(this);
+    this.wsConnect = this.wsConnect.bind(this);
+    this.onChangeDateTime = this.onChangeDateTime.bind(this);
   }
 
   startTimer() {
-    if(this.timerId) {
-      clearInterval(this.timerId)
+    if (this.timerId) {
+      clearInterval(this.timerId);
     }
     this.timerId = setInterval(() => {
-      const newTime = this.state.time + 1000;
-      /*  axios
-        .post("http://localhost:12345/chartData", {
-          time: newTime,
-          topActiveUsers: 5,
-          fixedUsers: true,
-        })
-        .then((response) => {
-          this.setState({
-            data: response.data,
-            time: newTime,
-          });
-        }); */
+      const newTime = new Date(
+        this.state.startTime.getTime() +
+          (this.defaulSpeed + 100 * this.state.speedValue)
+      );
+      const wsCurrentStatus = this.ws.readyState;
+
+      let webSocketstatus;
+      if (wsCurrentStatus === WebSocket.OPEN) {
+        webSocketstatus = STATIC.websocket.connected;
+      } else if (wsCurrentStatus === WebSocket.CONNECTING) {
+        webSocketstatus = STATIC.websocket.connecting;
+      } else if (wsCurrentStatus === WebSocket.CLOSING) {
+        webSocketstatus = STATIC.websocket.disconnecting;
+      } else if (wsCurrentStatus === WebSocket.CLOSED) {
+        this.wsConnect();
+        webSocketstatus = STATIC.websocket.disconnected;
+      }
 
       this.setState({
-        time: newTime,
+        startTime: newTime,
+        webSocketstatus,
       });
-      if (this.ws.readyState === WebSocket.OPEN && this.delay === 0) {
+      if (wsCurrentStatus === WebSocket.OPEN && this.delay === 0) {
         this.ws.send(
           JSON.stringify({
-            time: newTime,
+            startTime: newTime.getTime(),
             topActiveUsers: 5,
-            fixedUsers: true,
+            fixedVisitor: true,
           })
         );
       } else {
         this.setState({
-          data: []
-        })
-        this.delay = this.delay > 0 ? this.delay - 1000 : 0
+          data: [],
+          webSocketstatus,
+        });
+        this.delay = this.delay > 0 ? this.delay - 1000 : 0;
       }
-    }, this.state.speed);
+    }, this.defaulSpeed);
   }
 
   clearTimer() {
-    if(this.timerId) {
-      clearInterval(this.timerId)
+    if (this.timerId) {
+      clearInterval(this.timerId);
     }
   }
 
-  componentDidMount() {
-    this.ws = new WebSocket("ws://localhost:12345/chartData");
+  wsConnect() {
+    this.ws = new WebSocket(config.endpoints.ws.chartData);
     this.ws.onopen = () => {
-      console.log("connected websocket main component");
+      this.setState({
+        webSocketstatus: STATIC.websocket.connected,
+      });
     };
     this.ws.onclose = (e) => {
-      console.log(
-        `Socket is closed. Reconnect will be attempted in second.`,
-        e.reason
-      );
+      this.setState({
+        webSocketstatus: STATIC.websocket.disconnected,
+      });
     };
     this.ws.onerror = (err) => {
-      console.error(
-        "Socket encountered error: ",
-        err.message,
-        "Closing socket"
-      );
-
+      this.setState({
+        webSocketstatus: STATIC.websocket.disconnected,
+      });
       this.ws.close();
     };
 
@@ -100,62 +111,102 @@ class LiveChart extends React.Component {
         data: data,
       });
 
-      this.delay = 1000 * rendomNumber(1, 10) // 10 secondes
+      this.delay = (1000 / this.state.speedValue) * rendomNumber(1, 10); // 1 to 10 secondes
     };
+  }
 
-    this.ws.onclose = () => {
-      console.log("disconnected");
-    };
-
-    this.startTimer()
+  componentDidMount() {
+    this.wsConnect();
+    this.startTimer();
   }
 
   componentWillUnmount() {
     this.ws.close();
   }
 
-  onSelectSpeed(e) {
-    const newSpeed = this.defaulSpeed / +e.target.value
-    this.setState({
-      speed: newSpeed
-    }, () => {
-      if(this.state.buttonLable === "stop") { 
-        this.startTimer();
-      }
-    })
-  }
-
-  chartFlowHandler(e) {
-    if(this.state.buttonLable === "stop") {
-      this.clearTimer()
-      this.setState({
-        buttonLable: "start"
-      })
-    } else {
-      this.startTimer()
-      this.setState({
-        buttonLable: "stop"
-      })
+  async onSelectSpeed(e) {
+    await this.setState({
+      speedValue: +e.target.value,
+    });
+    if (this.state.buttonLable === STATIC.btn.stop) {
+      this.startTimer();
     }
   }
 
+  chartFlowHandler(e) {
+    if (this.state.buttonLable === STATIC.btn.stop) {
+      this.clearTimer();
+      this.setState({
+        buttonLable: STATIC.btn.start,
+      });
+    } else {
+      this.startTimer();
+      this.setState({
+        buttonLable: STATIC.btn.stop,
+      });
+    }
+  }
+
+  async onChangeDateTime(time) {
+    if (this.state.startTime.getTime() !== time.getTime()) {
+      await this.setState({
+        startTime: time,
+      });
+      if (this.state.buttonLable === STATIC.btn.stop) {
+        this.startTimer();
+      }
+    }
+  }
   render() {
     return (
-      <div>
-        <br />
-        Speed 
-        <select id="speed" onChange={this.onSelectSpeed}>
-          {this.state.speedOptions.map(speed => (<option value={speed}>x{speed}</option>))}
-        </select> 
-        <button style={{marginLeft: "10px"}} onClick={this.chartFlowHandler}> {this.state.buttonLable} </button>
-        <LiveChartView
-          {...this.props}
-          data={this.state.data}
-          time={this.state.time}
-          transitionDuration={this.state.speed}
-        />
-     </div>
+      <>
+        <div>
+          <br />
+          Speed{" "}
+          <select id="speed" className={"input"} onChange={this.onSelectSpeed}>
+            {this.state.speedOptions.map((speed) => (
+              <option value={speed} key={speed}>
+                x{speed}
+              </option>
+            ))}
+          </select>
+          <DateTimePicker
+            className={"input date-picker"}
+            onChange={this.onChangeDateTime}
+            value={this.state.startTime}
+            clearIcon={null}
+            // calendarIcon={null}
+            disableCalendar={false}
+          />
+          <button
+            style={{ marginLeft: "10px" }}
+            className={"input"}
+            onClick={this.chartFlowHandler}
+          >
+            {this.state.buttonLable}
+          </button>
+          <div className="web-socket-status">
+            WebSocket Status:{" "}
+            <b className={`ws-${this.state.webSocketstatus.toLowerCase()}`}>
+              {this.state.webSocketstatus}
+            </b>
+          </div>
+        </div>
+        <div>
+          <LiveChartView
+            {...this.props}
+            data={this.state.data}
+            startTime={this.state.startTime}
+          />
+        </div>
+      </>
     );
   }
 }
+
+LiveChart.defaultProps = {
+  data: [],
+  startTime: new Date(),
+}
+
 export default LiveChart;

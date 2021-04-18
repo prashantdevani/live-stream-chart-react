@@ -1,5 +1,5 @@
 {
-  "name": "real0time-chart-react",
+  "name": "live-stream-chart-react",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -8,8 +8,10 @@
     "@testing-library/user-event": "^12.8.3",
     "axios": "^0.21.1",
     "d3": "^6.6.2",
+    "dotenv": "^8.2.0",
     "lodash": "^4.17.21",
     "react": "^17.0.2",
+    "react-datetime-picker": "^3.2.0",
     "react-dom": "^17.0.2",
     "react-scripts": "4.0.3",
     "web-vitals": "^1.1.1",

@@ -40,3 +40,39 @@
 .axis-grid line {
   stroke: #ccc;
 }
+
+.web-socket-status { 
+  float: right;
+    margin-right: 31px;
+}
+
+.web-socket-status .ws-connected {
+  color : green;
+}
+
+.web-socket-status .ws-connecting {
+  color: orange
+}
+
+.web-socket-status .ws-closed, .web-socket-status .ws-disconnected {
+  color: red
+}
+
+#tooltip {
+  background: rgb(179,178,179,.9);
+  padding: 10px 26px;
+  color: white;
+  border-radius: 13px;
+  position: absolute;
+  opacity: 0;
+}
+
+.input {
+  height: 30px !important;
+  margin-top: 0px ;
+}
+
+.date-picker {
+  margin-left: 10px;
+  top: 2px;
+}
